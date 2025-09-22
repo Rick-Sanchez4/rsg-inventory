@@ -1,4 +1,5 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
+lib.locale()
 local config = require 'shared.config'
 Inventory = Inventory or {}
 Inventory.LoadInventory = function(source, citizenid)
@@ -486,6 +487,19 @@ end
 
 exports('ClearStash', Inventory.ClearStash)
 
+-- Save a given stash
+--- @param identifier string
+Inventory.SaveStash = function(identifier)
+    if not identifier then return end
+    local inventory = Inventories[identifier]
+    if not inventory then return end
+    local items = json.encode(inventory.items)
+    MySQL.prepare("INSERT INTO inventories (identifier, items) VALUES (?, ?) ON DUPLICATE KEY UPDATE items = ?",
+        { identifier, items, items })
+end
+
+exports("SaveStash", Inventory.SaveStash)
+
 --- @param source number The player's server ID.
 --- @param identifier string|nil The identifier of the inventory to open.
 --- @param data table|nil Additional data for initializing the inventory.
@@ -583,10 +597,11 @@ Inventory.AddItem = function(identifier, item, amount, slot, info, reason)
     end
 
     Inventory.CheckItemsDecay(inventory)
-
+    
     local totalWeight = Inventory.GetTotalWeight(inventory)
     if totalWeight + (itemInfo.weight * amount) > inventoryWeight then
         print('AddItem: Not enough weight available')
+        TriggerClientEvent('ox_lib:notify', player.PlayerData.source, { type = 'error', title = locale('error.not_enough_weight'), duration = 7000})
         return false
     end
 
@@ -620,6 +635,7 @@ Inventory.AddItem = function(identifier, item, amount, slot, info, reason)
         slot = slot or Inventory.GetFirstFreeSlot(inventory, inventorySlots)
         if not slot then
             print('AddItem: No free slot available')
+            TriggerClientEvent('ox_lib:notify', player.PlayerData.source, { type = 'error', title = locale('error.inventory_full'), description = locale('error.no_free_slots'), duration = 7000})
             return false
         end
 
